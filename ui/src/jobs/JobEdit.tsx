@@ -64,6 +64,7 @@ const EditForm = (record: any) => (
         <TextInput disabled source="id" helperText="Job id. Must be unique, it's a copy of name." />
         <TextInput source="name" helperText="Job name. Must be unique, acts as the id." validate={required()} />
         <TextInput source="displayname" helperText="Display name of the job. If present, displayed instead of the name." />
+        <TextInput source="metadata.group" label="Group" helperText="Group related jobs together in the jobs table." />
         <TextInput source="timezone" helperText="The timezone where the cron expression will be evaluated in." />
         <TextInput source="schedule" helperText="Cron expression for the job. When to run the job." validate={required()} />
         <TextInput source="owner" helperText="Arbitrary string indicating the owner of the job." disabled />

@@ -11,10 +11,12 @@ import {
     BulkDeleteButton,
     BooleanInput,
     Pagination,
-    FunctionField
+    FunctionField,
+    ListContextProvider,
+    useListContext
 } from 'react-admin';
-import { Fragment } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Fragment, useMemo, useState } from 'react';
+import { Box, MenuItem, TextField as MuiTextField, Typography } from '@mui/material';
 import BulkRunButton from "./BulkRunButton";
 import BulkToggleButton from "./BulkToggleButton";
 import StatusField from "./StatusField";
@@ -51,6 +53,56 @@ const JobBulkActionButtons = () => (
 );
 
 const JobPagination = (props: any) => <Pagination rowsPerPageOptions={[5, 10, 25, 50, 100]} {...props} />;
+
+const getJobGroupValue = (record: any) => record?.metadata?.group || '';
+const getJobGroup = (record: any) => getJobGroupValue(record) || '-';
+
+const JobGroupFilter = ({
+    selectedGroup,
+    onGroupChange,
+}: {
+    selectedGroup: string;
+    onGroupChange: (group: string) => void;
+}) => {
+    const { data = [] } = useListContext();
+    const groups = useMemo(() => {
+        const loadedGroups = new Set<string>();
+
+        data.forEach((job: any) => {
+            const group = getJobGroupValue(job);
+
+            if (group) {
+                loadedGroups.add(group);
+            }
+        });
+
+        if (selectedGroup) {
+            loadedGroups.add(selectedGroup);
+        }
+
+        return Array.from(loadedGroups).sort();
+    }, [data, selectedGroup]);
+
+    return (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 2, py: 1.5 }}>
+            <MuiTextField
+                select
+                label="Group"
+                value={selectedGroup}
+                onChange={(event) => onGroupChange(event.target.value)}
+                size="small"
+                sx={{ minWidth: 180 }}
+            >
+                <MenuItem value="">All groups</MenuItem>
+                {groups.map((group) => (
+                    <MenuItem key={group} value={group}>
+                        {group}
+                    </MenuItem>
+                ))}
+            </MuiTextField>
+        </Box>
+    );
+};
 
 const PREFIX = 'JobList';
 
@@ -128,10 +180,78 @@ const ListHeader = () => (
     </Box>
 );
 
-const getJobGroup = (record: any) =>
-    record?.metadata?.group || '-';
+const JobDatagridContent = () => (
+    <StyledDatagrid rowClick="show" bulkActionButtons={<JobBulkActionButtons />}>
+        <TextField source="id" />
+        <TextField source="displayname" label="Display name" />
+        <FunctionField
+            label="Group"
+            render={(record: any) => getJobGroup(record)}
+        />
+        <TextField source="timezone" sortable={false}
+            cellClassName={classes.hiddenOnSmallScreens}
+            headerClassName={classes.hiddenOnSmallScreens} />
+        <TextField source="schedule" />
+        <NumberField source="success_count"
+            cellClassName={classes.hiddenOnSmallScreens}
+            headerClassName={classes.hiddenOnSmallScreens} />
+        <NumberField source="error_count"
+            cellClassName={classes.hiddenOnSmallScreens}
+            headerClassName={classes.hiddenOnSmallScreens} />
+        <DateField source="last_success" showTime />
+        <DateField source="last_error" showTime />
+        <EnabledField label="Enabled" />
+        <NumberField source="retries" sortable={false} />
+        <StatusField />
+        <DateField source="next" showTime />
+        <EditButton/>
+    </StyledDatagrid>
+);
+
+const JobDatagrid = ({ selectedGroup }: { selectedGroup: string }) => {
+    const listContext = useListContext();
+    const groupedData = useMemo(() => {
+        if (!listContext.data) {
+            return undefined;
+        }
+
+        const visibleJobs = selectedGroup
+            ? listContext.data.filter((job: any) => getJobGroupValue(job) === selectedGroup)
+            : listContext.data;
+
+        return [...visibleJobs].sort((jobA: any, jobB: any) => {
+            const groupA = getJobGroupValue(jobA);
+            const groupB = getJobGroupValue(jobB);
+            const groupCompare = groupA.localeCompare(groupB);
+
+            if (groupCompare !== 0) {
+                return groupCompare;
+            }
+
+            return (jobA.name || jobA.id || '').localeCompare(jobB.name || jobB.id || '');
+        });
+    }, [listContext.data, selectedGroup]);
+
+    if (!groupedData) {
+        return <JobDatagridContent />;
+    }
+
+    const groupedContext = {
+        ...listContext,
+        data: groupedData,
+        total: selectedGroup ? groupedData.length : listContext.total,
+    } as typeof listContext;
+
+    return (
+        <ListContextProvider value={groupedContext}>
+            <JobDatagridContent />
+        </ListContextProvider>
+    );
+};
 
 const JobList = (props: any) => {
+    const [selectedGroup, setSelectedGroup] = useState('');
+
     return (
         <Box sx={{ p: { xs: 2, md: 3 } }}>
             <ListHeader />
@@ -150,33 +270,8 @@ const JobList = (props: any) => {
                     },
                 }}
             >
-                <StyledDatagrid rowClick="show" bulkActionButtons={<JobBulkActionButtons />}>
-                    <TextField source="id" />
-                    <TextField source="displayname" label="Display name" />
-
-                    <FunctionField
-                        label="Group"
-                        render={(record: any) => getJobGroup(record)}
-                    />
-
-                    <TextField source="timezone" sortable={false}
-                        cellClassName={classes.hiddenOnSmallScreens}
-                        headerClassName={classes.hiddenOnSmallScreens} />
-                    <TextField source="schedule" />
-                    <NumberField source="success_count"
-                        cellClassName={classes.hiddenOnSmallScreens}
-                        headerClassName={classes.hiddenOnSmallScreens} />
-                    <NumberField source="error_count"
-                        cellClassName={classes.hiddenOnSmallScreens}
-                        headerClassName={classes.hiddenOnSmallScreens} />
-                    <DateField source="last_success" showTime />
-                    <DateField source="last_error" showTime />
-                    <EnabledField label="Enabled" />
-                    <NumberField source="retries" sortable={false} />
-                    <StatusField />
-                    <DateField source="next" showTime />
-                    <EditButton />
-                </StyledDatagrid>
+                <JobGroupFilter selectedGroup={selectedGroup} onGroupChange={setSelectedGroup} />
+                <JobDatagrid selectedGroup={selectedGroup} />
             </List>
         </Box>
     );

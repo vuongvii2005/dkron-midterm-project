@@ -292,6 +292,9 @@ const JobShow = (props: any) => (
               <Labeled label="Display Name">
                 <TextField source="displayname" emptyText="-" />
               </Labeled>
+              <Labeled label="Group">
+                <TextField source="metadata.group" emptyText="-" />
+              </Labeled>
               <Labeled label="Timezone">
                 <TextField source="timezone" emptyText="UTC" />
               </Labeled>
