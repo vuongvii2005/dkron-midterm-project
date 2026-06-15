@@ -141,7 +141,6 @@ func (h *HTTPTransport) APIRoutes(r *gin.RouterGroup, middleware ...gin.HandlerF
 	v1.GET("/members", h.membersHandler)
 	v1.GET("/leader", h.leaderHandler)
 	v1.GET("/isleader", h.isLeaderHandler)
-	v1.GET("/cluster-monitor", h.clusterMonitorHandler)
 	v1.POST("/leave", h.leaveHandler)
 	v1.POST("/restore", h.restoreHandler)
 
@@ -160,9 +159,10 @@ func (h *HTTPTransport) APIRoutes(r *gin.RouterGroup, middleware ...gin.HandlerF
 
 	jobs := v1.Group("/jobs")
 	jobs.DELETE("/:job", h.jobDeleteHandler)
-	jobs.POST("/:job", h.jobRunHandler)
+	jobs.POST("/:job/auto-disable-check", h.jobAutoDisableCheckHandler)
 	jobs.POST("/:job/run", h.jobRunHandler)
 	jobs.POST("/:job/toggle", h.jobToggleHandler)
+	jobs.POST("/:job", h.jobRunHandler)
 	jobs.PUT("/:job", h.jobCreateOrUpdateHandler)
 
 	// Place fallback routes last
@@ -513,71 +513,6 @@ func (h *HTTPTransport) membersHandler(c *gin.Context) {
 	c.Header("X-Total-Count", strconv.Itoa(len(mems)))
 	renderJSON(c, http.StatusOK, mems)
 }
-func (h *HTTPTransport) clusterMonitorHandler(c *gin.Context) {
-	members := h.agent.serf.Members()
-
-	leader, err := h.agent.leaderMember()
-	if err != nil {
-		h.logger.WithError(err).Warn("api: unable to get leader member")
-	}
-
-	type NodeStatus struct {
-		Name        string            `json:"name"`
-		Address     string            `json:"address"`
-		Status      string            `json:"status"`
-		Role        string            `json:"role"`
-		Tags        map[string]string `json:"tags"`
-		IsAlive     bool              `json:"is_alive"`
-		IsLeader    bool              `json:"is_leader"`
-		HealthScore int               `json:"health_score"`
-	}
-
-	nodes := make([]NodeStatus, 0, len(members))
-	onlineCount := 0
-	leaderName := ""
-
-	if leader != nil {
-		leaderName = leader.Name
-	}
-
-	for _, m := range members {
-		isAlive := m.Status.String() == "alive"
-		isLeader := leader != nil && leader.Name == m.Name
-
-		role := "follower"
-		if isLeader {
-			role = "leader"
-		}
-
-		healthScore := 0
-		if isAlive {
-			healthScore = 100
-			onlineCount++
-		}
-
-		nodes = append(nodes, NodeStatus{
-			Name:        m.Name,
-			Address:     m.Addr.String(),
-			Status:      m.Status.String(),
-			Role:        role,
-			Tags:        m.Tags,
-			IsAlive:     isAlive,
-			IsLeader:    isLeader,
-			HealthScore: healthScore,
-		})
-	}
-
-	response := gin.H{
-		"leader":        leaderName,
-		"total_nodes":   len(nodes),
-		"online_nodes":  onlineCount,
-		"offline_nodes": len(nodes) - onlineCount,
-		"nodes":         nodes,
-	}
-
-	renderJSON(c, http.StatusOK, response)
-}
-
 func (h *HTTPTransport) leaderHandler(c *gin.Context) {
 	member, err := h.agent.leaderMember()
 	if err != nil {
@@ -678,4 +613,49 @@ func (h *HTTPTransport) statsHandler(c *gin.Context) {
 	}
 
 	renderJSON(c, http.StatusOK, stats)
+}
+func (h *HTTPTransport) jobAutoDisableCheckHandler(c *gin.Context) {
+	jobName := c.Param("job")
+
+	threshold, err := strconv.Atoi(c.DefaultQuery("threshold", "5"))
+	if err != nil || threshold < 1 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"error": "threshold must be a positive integer",
+		})
+		return
+	}
+
+	job, err := h.agent.Store.GetJob(c.Request.Context(), jobName, nil)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusNotFound, err)
+		return
+	}
+	if job == nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	disabledBefore := job.Disabled
+	autoDisabled := false
+
+	if job.ErrorCount >= threshold && !job.Disabled {
+		job.Disabled = true
+		autoDisabled = true
+
+		if err := h.agent.GRPCClient.SetJob(job); err != nil {
+			_ = c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+	}
+
+	renderJSON(c, http.StatusOK, gin.H{
+		"job":             job.Name,
+		"error_count":     job.ErrorCount,
+		"success_count":   job.SuccessCount,
+		"threshold":       threshold,
+		"disabled_before": disabledBefore,
+		"disabled_after":  job.Disabled,
+		"auto_disabled":   autoDisabled,
+		"message":         fmt.Sprintf("Auto-disable check completed for job %s", job.Name),
+	})
 }

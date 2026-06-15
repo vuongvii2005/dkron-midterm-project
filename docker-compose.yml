@@ -1,7 +1,8 @@
 services:
-  # Run a leader node
   dkron:
-    image: dkron/dkron:latest
+    build: .
+    image: dkron-local:dev
+    entrypoint: ["dkron"]
     command: agent --server --log-level=debug --bootstrap-expect=1
     ports:
       - "8080:8080"
@@ -11,7 +12,9 @@ services:
       - GODEBUG=netdns=go
 
   dkron-server:
-    image: dkron/dkron:latest
+    build: .
+    image: dkron-local:dev
+    entrypoint: ["dkron"]
     command: agent --server --retry-join=dkron:8946 --log-level=debug --bootstrap-expect=3
     ports:
       - "8080"
@@ -20,9 +23,10 @@ services:
     environment:
       - GODEBUG=netdns=go
 
-  # Run an agent node
   dkron-agent:
-    image: dkron/dkron:latest
+    build: .
+    image: dkron-local:dev
+    entrypoint: ["dkron"]
     command: agent --retry-join=dkron:8946 --log-level=debug --tag agent=true
     ports:
       - "8946"
