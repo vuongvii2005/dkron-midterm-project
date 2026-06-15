@@ -10,7 +10,8 @@ import {
     SelectInput,
     BulkDeleteButton,
     BooleanInput,
-    Pagination
+    Pagination,
+    FunctionField
 } from 'react-admin';
 import { Fragment } from 'react';
 import { Box, Typography } from '@mui/material';
@@ -37,7 +38,7 @@ const JobFilter = (props: any) => (
                 { id: 'untriggered', name: 'Waiting to Run' },
             ]}
         />
-        <BooleanInput source="disabled"/>
+        <BooleanInput source="disabled" />
     </Filter>
 );
 
@@ -127,6 +128,9 @@ const ListHeader = () => (
     </Box>
 );
 
+const getJobGroup = (record: any) =>
+    record?.metadata?.group || '-';
+
 const JobList = (props: any) => {
     return (
         <Box sx={{ p: { xs: 2, md: 3 } }}>
@@ -149,6 +153,12 @@ const JobList = (props: any) => {
                 <StyledDatagrid rowClick="show" bulkActionButtons={<JobBulkActionButtons />}>
                     <TextField source="id" />
                     <TextField source="displayname" label="Display name" />
+
+                    <FunctionField
+                        label="Group"
+                        render={(record: any) => getJobGroup(record)}
+                    />
+
                     <TextField source="timezone" sortable={false}
                         cellClassName={classes.hiddenOnSmallScreens}
                         headerClassName={classes.hiddenOnSmallScreens} />
@@ -165,7 +175,7 @@ const JobList = (props: any) => {
                     <NumberField source="retries" sortable={false} />
                     <StatusField />
                     <DateField source="next" showTime />
-                    <EditButton/>
+                    <EditButton />
                 </StyledDatagrid>
             </List>
         </Box>

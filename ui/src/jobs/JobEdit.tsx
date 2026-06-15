@@ -67,7 +67,7 @@ const EditForm = (record: any) => (
         <TextInput source="timezone" helperText="The timezone where the cron expression will be evaluated in." />
         <TextInput source="schedule" helperText="Cron expression for the job. When to run the job." validate={required()} />
         <TextInput source="owner" helperText="Arbitrary string indicating the owner of the job." disabled />
-        <TextInput source="owner_email" helperText="Email address to use for notifications."/>
+        <TextInput source="owner_email" helperText="Email address to use for notifications." />
         <TextInput source="parent_job" helperText="Job id of job that this job is dependent upon." />
         <BooleanInput source="ephemeral" helperText="Delete the job after the first successful execution." />
         <DateTimeInput source="starts_at" helperText="The job will not be executed before this time." />
@@ -99,6 +99,15 @@ const EditForm = (record: any) => (
             }}
             helperText="Tags of the target servers to run this job against."
         />
+
+        {/* ĐÂY LÀ DÒNG TÔI VỪA THÊM VÀO ĐỂ NHẬP GROUP DỄ DÀNG HƠN */}
+        <TextInput
+            source="metadata.group"
+            label="Job Group"
+            helperText="Nhập tên nhóm (VD: demo)"
+            fullWidth
+        />
+
         <JsonInput
             source="metadata"
             reactJsonOptions={{
