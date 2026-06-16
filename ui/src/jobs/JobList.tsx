@@ -13,10 +13,13 @@ import {
     Pagination,
     FunctionField,
     ListContextProvider,
-    useListContext
+    useListContext,
+    useRecordContext,
+    useNotify,
+    useRefresh
 } from 'react-admin';
 import { Fragment, useMemo, useState } from 'react';
-import { Box, MenuItem, TextField as MuiTextField, Typography } from '@mui/material';
+import { Box, MenuItem, TextField as MuiTextField, Typography, Switch, CircularProgress } from '@mui/material';
 import BulkRunButton from "./BulkRunButton";
 import BulkToggleButton from "./BulkToggleButton";
 import StatusField from "./StatusField";
@@ -180,6 +183,61 @@ const ListHeader = () => (
     </Box>
 );
 
+// --- COMPONENT AUTO DISABLE CỦA NGƯỜI 2 ---
+const AutoDisableToggle = () => {
+    const record = useRecordContext();
+    const notify = useNotify();
+    const refresh = useRefresh();
+    const [isLoading, setIsLoading] = useState(false);
+
+    if (!record) return null;
+
+    const handleToggle = async (event: any) => {
+        event.stopPropagation();
+        setIsLoading(true);
+        try {
+            const response = await fetch(`/v1/jobs/${record.id}/toggle`, {
+                method: 'POST',
+            });
+
+            if (response.ok) {
+                notify(`Đã ${record.disabled ? 'Bật' : 'Tắt (Auto Disable)'} Job thành công!`, { type: 'success' });
+                refresh();
+            } else {
+                notify('Lỗi: Không thể thay đổi trạng thái!', { type: 'warning' });
+            }
+        } catch (error) {
+            notify('Lỗi kết nối máy chủ!', { type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const stopBubbling = (e: any) => {
+        e.stopPropagation();
+    };
+
+    return (
+        <Box
+            onClick={stopBubbling}
+            onMouseDown={stopBubbling}
+            onMouseUp={stopBubbling}
+            sx={{ display: 'inline-block' }}
+        >
+            {isLoading ? (
+                <CircularProgress size={20} />
+            ) : (
+                <Switch
+                    checked={!record.disabled}
+                    onChange={handleToggle}
+                    color={!record.disabled ? "success" : "default"}
+                />
+            )}
+        </Box>
+    );
+};
+// ----------------------------------------
+
 const JobDatagridContent = () => (
     <StyledDatagrid rowClick="show" bulkActionButtons={<JobBulkActionButtons />}>
         <TextField source="id" />
@@ -200,11 +258,19 @@ const JobDatagridContent = () => (
             headerClassName={classes.hiddenOnSmallScreens} />
         <DateField source="last_success" showTime />
         <DateField source="last_error" showTime />
+
         <EnabledField label="Enabled" />
+
+        {/* --- CỘT AUTO DISABLE ĐÃ ĐƯỢC CHÈN VÀO ĐÂY --- */}
+        <FunctionField
+            label="Auto Disable"
+            render={() => <AutoDisableToggle />}
+        />
+
         <NumberField source="retries" sortable={false} />
         <StatusField />
         <DateField source="next" showTime />
-        <EditButton/>
+        <EditButton />
     </StyledDatagrid>
 );
 
